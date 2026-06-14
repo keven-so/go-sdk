@@ -41,6 +41,42 @@ go run ./cmd/salesctl dry-run -live      # real Claude (needs ANTHROPIC_API_KEY)
 activity log. With `-live`, the same loop runs against the real Claude API while
 the comms providers stay in dry-run, so still nothing is actually sent.
 
+## Phase 1: CustomAIze handoff + Supabase schema
+
+CustomAIze runs marketing and sends the first email; when it hands a lead to
+sales it POSTs a **handoff** to this service. Phase 1 adds the intake and the
+database schema that persists it.
+
+- **Handoff webhook** (`internal/intake`) — `POST /webhooks/handoff` verifies an
+  HMAC-SHA256 body signature (`X-CustomAIze-Signature: sha256=<hex>`, keyed by
+  `WEBHOOK_SIGNING_SECRET`), then creates the lead, contact, conversation, the
+  already-sent first email, and a `handoff_received` activity, and routes the lead
+  to a customer-facing role via the supervisor. Delivery is **idempotent** on
+  `handoff_id` (replays return the original ids, write nothing).
+- **Schema** (`migrations/0001_init.sql`) — `leads`, `contacts`, `conversations`,
+  `messages`, `activities`, `deals`, plus a `handoffs` table whose unique
+  `external_id` gives durable exactly-once delivery. Files only; see
+  [`migrations/README.md`](migrations/README.md) for how/when to apply.
+
+```bash
+go run ./cmd/salesctl serve        # listens on $HTTP_ADDR (default :8080)
+
+# example handoff (computes the signature from WEBHOOK_SIGNING_SECRET):
+body='{"handoff_id":"ho_1","source":"customaize",
+  "lead":{"company":"Acme","domain":"acme.com"},
+  "contact":{"email":"jane@acme.com","name":"Jane","consent_email":true},
+  "first_email":{"subject":"Hi","body":"...","gmail_thread_id":"t1"}}'
+sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$WEBHOOK_SIGNING_SECRET" | awk '{print $2}')"
+curl -sX POST localhost:8080/webhooks/handoff \
+  -H "X-CustomAIze-Signature: $sig" -d "$body"
+```
+
+The webhook runs against the in-memory store today; pointing it at a
+Supabase-backed `crm.Store` (after applying the migration) is the Phase 1
+follow-up. The exact CustomAIze payload may differ — `HandoffPayload` in
+`internal/intake/intake.go` is the contract to adjust, and `Context` carries
+arbitrary marketing metadata so the schema need not change to add fields.
+
 ## Architecture (hierarchical supervisor + agent-as-tool)
 
 The roster is grounded in current production AI sales systems (Alta Katie/Alex/Luna,
@@ -72,6 +108,9 @@ salesctl ─▶ Supervisor.Route ─▶ agent.Loop ─▶ ToolBridge ─▶ mcp.
 
 ## Roadmap
 
-Phase 0 (this) → Supabase + handoff webhook → live Gmail → SMS + cadences +
-scoring → voice + booking + Closer → analytics & hardening. See the project plan
-for details.
+Phase 0 (skeleton) → **Phase 1: Supabase schema + handoff webhook (this)** →
+live Gmail → SMS + cadences + scoring → voice + booking + Closer → analytics &
+hardening. See the project plan for details.
+
+Phase 1 remaining: implement a Supabase-backed `crm.Store` and apply
+`migrations/0001_init.sql` to a project, then point `salesctl serve` at it.

@@ -4,14 +4,15 @@
 
 // Command salesctl drives the multi-agent sales system. Its "dry-run" subcommand
 // seeds a CustomAIze lead handoff and runs the Supervisor → SDR flow end-to-end
-// against the in-process MCP tool servers, sending nothing real. "roles" prints
-// the agent roster.
+// against the in-process MCP tool servers, sending nothing real. "serve" runs the
+// CustomAIze handoff webhook. "roles" prints the agent roster.
 //
 // Usage:
 //
 //	go run ./cmd/salesctl roles               # print the agent roster
 //	go run ./cmd/salesctl dry-run             # scripted fake LLM, no API key
 //	go run ./cmd/salesctl dry-run -live       # real Claude (needs ANTHROPIC_API_KEY)
+//	go run ./cmd/salesctl serve               # run the CustomAIze handoff webhook
 package main
 
 import (
@@ -42,6 +43,20 @@ func main() {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
+	case "serve":
+		fs := flag.NewFlagSet("serve", flag.ExitOnError)
+		addr := fs.String("addr", "", "listen address (defaults to $HTTP_ADDR or :8080)")
+		_ = fs.Parse(os.Args[2:])
+		listen := *addr
+		if listen == "" {
+			if listen = os.Getenv("HTTP_ADDR"); listen == "" {
+				listen = ":8080"
+			}
+		}
+		if err := runServe(listen); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
 	default:
 		usage()
 	}
@@ -49,7 +64,7 @@ func main() {
 
 // usage prints the command synopsis and exits with a non-zero status.
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: salesctl <roles | dry-run [-live]>")
+	fmt.Fprintln(os.Stderr, "usage: salesctl <roles | dry-run [-live] | serve [-addr :8080]>")
 	os.Exit(2)
 }
 
