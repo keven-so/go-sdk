@@ -63,7 +63,10 @@ func (h *handlers) scoreLead(_ context.Context, _ *mcp.ServerSession, p *mcp.Cal
 	if err != nil {
 		return errResult[scoring.Result](err.Error()), nil
 	}
-	contacts, _ := h.store.ListContacts(lead.ID)
+	contacts, err := h.store.ListContacts(lead.ID)
+	if err != nil {
+		return errResult[scoring.Result](fmt.Sprintf("failed to list contacts: %v", err)), nil
+	}
 	// Gather messages across this lead's conversations is out of scope for the
 	// store interface here; Phase 0 scores on lead + contacts (intent signal
 	// grows once conversation message history is wired in).

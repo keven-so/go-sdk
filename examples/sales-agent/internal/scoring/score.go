@@ -90,7 +90,10 @@ func isSenior(title string) bool {
 	return false
 }
 
-// small dependency-free string helpers (avoid importing strings for two uses)
+// small dependency-free string helpers (avoid importing strings for two uses).
+// lower is ASCII-only, which is sufficient for the Phase 0 English-only titles;
+// non-ASCII titles (e.g. "Señor Director") would need strings.ToLower once
+// internationalization matters.
 func lower(s string) string {
 	b := []byte(s)
 	for i, c := range b {

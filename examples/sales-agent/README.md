@@ -16,8 +16,10 @@ the SDK in this repo.
 - **Tool bridge** (`internal/agent/toolbridge.go`) — the seam that maps the
   model's `tool_use` calls onto MCP `CallTool` over `ClientSession`. This is the
   core idea: the loop is an **MCP client**; capabilities are **MCP servers**.
-- **Four MCP tool servers** with dry-run providers: `comms` (email/SMS/voice),
-  `crm`, `schedule` (booking), `intel` (enrich/score).
+- **Six MCP tool servers**: four base servers with dry-run providers (`comms`
+  (email/SMS/voice), `crm`, `schedule` (booking), `intel` (enrich/score)) and two
+  higher-order servers (`team` for support sub-agents, `orchestrator` for routing
+  and qualification).
 - **In-memory CRM store** (`internal/crm`) implementing the `Store` interface a
   Supabase backend will later satisfy.
 - **Provider-agnostic LLM** (`internal/llm`): a real Anthropic adapter **and** a

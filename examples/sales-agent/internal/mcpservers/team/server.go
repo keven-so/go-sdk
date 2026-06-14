@@ -101,7 +101,11 @@ type AnalyzeIn struct {
 
 func (h *handlers) analyzePipeline(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[AnalyzeIn]) (*mcp.CallToolResultFor[TextOut], error) {
 	canned := "Pipeline (dry-run): healthy top-of-funnel, thin mid-stage. Bottleneck: discovery→proposal. Highest-leverage action: tighten MEDDICC on the 3 oldest open opps."
-	out, err := h.run(ctx, agent.RevOps, fmt.Sprintf("Analyze pipeline health. Scope: %s", p.Arguments.Scope), canned)
+	prompt := "Analyze pipeline health."
+	if p.Arguments.Scope != "" {
+		prompt += fmt.Sprintf(" Scope: %s", p.Arguments.Scope)
+	}
+	out, err := h.run(ctx, agent.RevOps, prompt, canned)
 	return finish(out, err)
 }
 

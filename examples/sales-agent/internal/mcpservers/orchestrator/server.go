@@ -11,6 +11,7 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/modelcontextprotocol/go-sdk/examples/sales-agent/internal/agent"
 	"github.com/modelcontextprotocol/go-sdk/examples/sales-agent/internal/crm"
@@ -58,11 +59,13 @@ func (h *handlers) assign(convID, role, reason, kind string) (*mcp.CallToolResul
 	if err != nil {
 		return errResult[RouteOut](err.Error()), nil
 	}
-	_, _ = h.store.AddActivity(&crm.Activity{
+	if _, err := h.store.AddActivity(&crm.Activity{
 		ConversationID: convID,
 		Type:           kind,
 		Summary:        fmt.Sprintf("%s → %s: %s", kind, role, reason),
-	})
+	}); err != nil {
+		log.Printf("orchestrator: failed to log %s activity for %s: %v", kind, convID, err)
+	}
 	return okResult(fmt.Sprintf("%s assigned to %s (%s)", convID, role, reason),
 		RouteOut{ConversationID: conv.ID, Role: role}), nil
 }
@@ -92,12 +95,14 @@ func (h *handlers) updateQualification(_ context.Context, _ *mcp.ServerSession, 
 	if err != nil {
 		return errResult[*crm.Lead](err.Error()), nil
 	}
-	_, _ = h.store.AddActivity(&crm.Activity{
+	if _, err := h.store.AddActivity(&crm.Activity{
 		ConversationID: in.ConversationID,
 		Type:           "qualification",
 		Summary:        fmt.Sprintf("Captured %s qualification", in.Framework),
 		Payload:        in.Fields,
-	})
+	}); err != nil {
+		log.Printf("orchestrator: failed to log qualification activity for %s: %v", in.ConversationID, err)
+	}
 	return okResult(fmt.Sprintf("Captured %s qualification for lead %s", in.Framework, lead.ID), updated), nil
 }
 

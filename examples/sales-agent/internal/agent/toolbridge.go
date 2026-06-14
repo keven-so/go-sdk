@@ -94,6 +94,10 @@ func (b *ToolBridge) Invoke(ctx context.Context, name string, input json.RawMess
 	return flattenContent(res.Content), res.IsError
 }
 
+// flattenContent extracts and newline-joins only the TextContent blocks from an
+// MCP tool result. Other content types (e.g. ImageContent, EmbeddedResource) are
+// intentionally ignored: the sales agents are text-only, so non-text results have
+// no place in the LLM transcript.
 func flattenContent(content []mcp.Content) string {
 	var sb strings.Builder
 	for _, c := range content {

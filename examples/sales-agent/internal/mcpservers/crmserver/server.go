@@ -44,7 +44,10 @@ func (h *handlers) getLead(_ context.Context, _ *mcp.ServerSession, p *mcp.CallT
 	if err != nil {
 		return errResult[GetLeadOut](err.Error()), nil
 	}
-	contacts, _ := h.store.ListContacts(lead.ID)
+	contacts, err := h.store.ListContacts(lead.ID)
+	if err != nil {
+		return errResult[GetLeadOut](fmt.Sprintf("failed to list contacts: %v", err)), nil
+	}
 	out := GetLeadOut{Lead: lead, Contacts: contacts}
 	text := fmt.Sprintf("Lead %s: %s (%s), status=%s tier=%s score=%d, %d contact(s)",
 		lead.ID, lead.Company, lead.Domain, lead.Status, lead.Tier, lead.Score, len(contacts))
