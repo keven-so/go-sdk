@@ -11,14 +11,14 @@ import "time"
 
 // Lead is a company/opportunity handed off from marketing or generated outbound.
 type Lead struct {
-	ID        string    `json:"id"`
-	Source    string    `json:"source"` // marketing | inbound | outbound
-	Company   string    `json:"company"`
-	Domain    string    `json:"domain"`
-	Status    string    `json:"status"` // new | working | engaged | meeting | won | lost
-	Score     int       `json:"score"`
-	Tier      string    `json:"tier"` // A | B | C
-	OwnerRole string    `json:"owner_role"`
+	ID        string `json:"id"`
+	Source    string `json:"source"` // marketing | inbound | outbound
+	Company   string `json:"company"`
+	Domain    string `json:"domain"`
+	Status    string `json:"status"` // new | working | engaged | meeting | won | lost
+	Score     int    `json:"score"`
+	Tier      string `json:"tier"` // A | B | C
+	OwnerRole string `json:"owner_role"`
 	// Qualification holds framework-keyed capture, e.g. {"bant": {...}, "meddicc": {...}}.
 	Qualification map[string]any `json:"qualification,omitempty"`
 	CreatedAt     time.Time      `json:"created_at"`

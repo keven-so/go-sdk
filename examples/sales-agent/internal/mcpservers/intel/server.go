@@ -26,22 +26,26 @@ func New(store crm.Store) *mcp.Server {
 	return s
 }
 
+// handlers holds the dependencies shared by the intel tool handlers.
 type handlers struct {
 	store crm.Store
 }
 
+// LeadIDIn is the input payload for tools that operate on a single lead id.
 type LeadIDIn struct {
 	LeadID string `json:"lead_id" jsonschema:"the lead id"`
 }
 
+// EnrichOut is the output payload for the enrich_lead tool.
 type EnrichOut struct {
-	Domain      string `json:"domain"`
-	Industry    string `json:"industry"`
-	SizeBucket  string `json:"size_bucket"`
-	Enriched    bool   `json:"enriched"`
-	Provenance  string `json:"provenance"`
+	Domain     string `json:"domain"`
+	Industry   string `json:"industry"`
+	SizeBucket string `json:"size_bucket"`
+	Enriched   bool   `json:"enriched"`
+	Provenance string `json:"provenance"`
 }
 
+// enrichLead implements the enrich_lead tool: it returns firmographic data for a lead (a Phase 0 stub).
 func (h *handlers) enrichLead(_ context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[LeadIDIn]) (*mcp.CallToolResultFor[EnrichOut], error) {
 	lead, err := h.store.GetLead(p.Arguments.LeadID)
 	if err != nil {
@@ -58,6 +62,7 @@ func (h *handlers) enrichLead(_ context.Context, _ *mcp.ServerSession, p *mcp.Ca
 	return okResult(fmt.Sprintf("Enriched %s: industry=%s size=%s (stub)", lead.Domain, out.Industry, out.SizeBucket), out), nil
 }
 
+// scoreLead implements the score_lead tool: it scores a lead and returns the result.
 func (h *handlers) scoreLead(_ context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[LeadIDIn]) (*mcp.CallToolResultFor[scoring.Result], error) {
 	lead, err := h.store.GetLead(p.Arguments.LeadID)
 	if err != nil {
@@ -75,6 +80,7 @@ func (h *handlers) scoreLead(_ context.Context, _ *mcp.ServerSession, p *mcp.Cal
 	return okResult(text, res), nil
 }
 
+// guessIndustry infers a coarse industry label from keywords in the domain.
 func guessIndustry(domain string) string {
 	switch {
 	case strings.Contains(domain, "shop"), strings.Contains(domain, "store"):
@@ -88,6 +94,7 @@ func guessIndustry(domain string) string {
 	}
 }
 
+// okResult builds a successful tool result with text and structured content.
 func okResult[T any](text string, out T) *mcp.CallToolResultFor[T] {
 	return &mcp.CallToolResultFor[T]{
 		Content:           []mcp.Content{&mcp.TextContent{Text: text}},
@@ -95,6 +102,7 @@ func okResult[T any](text string, out T) *mcp.CallToolResultFor[T] {
 	}
 }
 
+// errResult builds a tool result flagged as an error with the given message.
 func errResult[T any](text string) *mcp.CallToolResultFor[T] {
 	return &mcp.CallToolResultFor[T]{
 		Content: []mcp.Content{&mcp.TextContent{Text: text}},

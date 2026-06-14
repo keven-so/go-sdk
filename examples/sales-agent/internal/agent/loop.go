@@ -35,6 +35,7 @@ type Event struct {
 	IsError bool
 }
 
+// defaultMaxTurns caps a loop run when MaxTurns is unset.
 const defaultMaxTurns = 16
 
 // Run executes the loop for one role starting from the given conversation
@@ -89,6 +90,7 @@ func (l *Loop) Run(ctx context.Context, role Role, history []llm.Message) ([]llm
 	return msgs, nil
 }
 
+// emit delivers an event to the Observer if one is configured.
 func (l *Loop) emit(e Event) {
 	if l.Observer != nil {
 		l.Observer(e)

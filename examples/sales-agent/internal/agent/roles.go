@@ -155,20 +155,20 @@ Operating rules:
 
 // Researcher enriches accounts and surfaces intent / ICP fit.
 var Researcher = Role{
-	Name:    "researcher",
-	Title:   "Researcher / Enrichment",
-	Kind:    KindSupport,
-	Mission: "Build a tight account brief: firmographics, intent signals, and ICP fit.",
+	Name:         "researcher",
+	Title:        "Researcher / Enrichment",
+	Kind:         KindSupport,
+	Mission:      "Build a tight account brief: firmographics, intent signals, and ICP fit.",
 	SystemPrompt: `You are a sales researcher. Given a lead, produce a concise brief a rep can act on: who the company is, the contact's role, likely pain, and any buying signals. Use get_lead and enrich_lead. Output 3-5 crisp bullets plus a one-line "why now".`,
 	AllowedTools: []string{"get_lead", "enrich_lead"},
 }
 
 // Copywriter drafts personalized, on-brand multi-channel copy.
 var Copywriter = Role{
-	Name:    "copywriter",
-	Title:   "Copywriter / Messaging",
-	Kind:    KindSupport,
-	Mission: "Write personalized, on-brand copy that earns replies.",
+	Name:         "copywriter",
+	Title:        "Copywriter / Messaging",
+	Kind:         KindSupport,
+	Mission:      "Write personalized, on-brand copy that earns replies.",
 	SystemPrompt: `You are a top sales copywriter. Given a lead and a messaging intent + channel, write a short, specific, human message (and a subject line for email). Personalize from context via get_lead. Avoid fluff and spam triggers. Return the ready-to-send copy only.`,
 	AllowedTools: []string{"get_lead"},
 }
@@ -176,20 +176,20 @@ var Copywriter = Role{
 // RevOps is the shared intelligence layer (à la Alta's Luna): scoring, timing,
 // and pipeline analytics.
 var RevOps = Role{
-	Name:    "revops",
-	Title:   "RevOps / Intelligence",
-	Kind:    KindSupport,
-	Mission: "Score and prioritize leads, recommend timing, and surface pipeline insight.",
+	Name:         "revops",
+	Title:        "RevOps / Intelligence",
+	Kind:         KindSupport,
+	Mission:      "Score and prioritize leads, recommend timing, and surface pipeline insight.",
 	SystemPrompt: `You are the revenue-intelligence layer for the sales team. Given a lead, return its score and tier (via score_lead), the best next channel and timing, and a one-line recommendation. When asked about pipeline, summarize health, bottlenecks, and the single highest-leverage action.`,
 	AllowedTools: []string{"get_lead", "score_lead"},
 }
 
 // SalesCoach reviews conversations and recommends the next best action.
 var SalesCoach = Role{
-	Name:    "coach",
-	Title:   "Sales Coach / QA",
-	Kind:    KindSupport,
-	Mission: "QA conversations and recommend the next best action and objection handling.",
+	Name:         "coach",
+	Title:        "Sales Coach / QA",
+	Kind:         KindSupport,
+	Mission:      "QA conversations and recommend the next best action and objection handling.",
 	SystemPrompt: `You are a sales coach reviewing a conversation. Using get_lead for context, assess what is going well and what is missing in the MEDDICC qualification, then recommend the single next best action and a crisp way to handle the most likely objection. Be direct and practical.`,
 	AllowedTools: []string{"get_lead"},
 }

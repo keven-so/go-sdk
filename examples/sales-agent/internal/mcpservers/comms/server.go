@@ -38,6 +38,7 @@ func New(dryRun bool) *mcp.Server {
 	return newWith(sender, caller)
 }
 
+// newWith builds the comms MCP server over the given sender and caller providers.
 func newWith(sender Sender, caller Caller) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "comms", Version: "0.1.0"}, nil)
 	h := &handlers{sender: sender, caller: caller}
@@ -56,6 +57,7 @@ func newWith(sender Sender, caller Caller) *mcp.Server {
 	return s
 }
 
+// handlers holds the comms providers shared by the tool handlers.
 type handlers struct {
 	sender Sender
 	caller Caller
@@ -63,6 +65,7 @@ type handlers struct {
 
 // --- send_email ---
 
+// SendEmailIn is the input payload for the send_email tool.
 type SendEmailIn struct {
 	ConversationID string `json:"conversation_id" jsonschema:"the conversation this message belongs to"`
 	To             string `json:"to" jsonschema:"recipient email address"`
@@ -70,11 +73,13 @@ type SendEmailIn struct {
 	BodyHTML       string `json:"body_html" jsonschema:"email body (HTML or plain text)"`
 }
 
+// SendResult is the output payload for the send_email and send_sms tools.
 type SendResult struct {
 	ExternalID string `json:"external_id"`
 	Status     string `json:"status"`
 }
 
+// sendEmail implements the send_email tool: it sends an email and returns its id.
 func (h *handlers) sendEmail(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[SendEmailIn]) (*mcp.CallToolResultFor[SendResult], error) {
 	in := p.Arguments
 	id, err := h.sender.SendEmail(ctx, in.To, in.Subject, in.BodyHTML)
@@ -87,12 +92,14 @@ func (h *handlers) sendEmail(ctx context.Context, _ *mcp.ServerSession, p *mcp.C
 
 // --- send_sms ---
 
+// SendSMSIn is the input payload for the send_sms tool.
 type SendSMSIn struct {
 	ConversationID string `json:"conversation_id" jsonschema:"the conversation this message belongs to"`
 	To             string `json:"to" jsonschema:"recipient phone number in E.164 format"`
 	Body           string `json:"body" jsonschema:"SMS text body"`
 }
 
+// sendSMS implements the send_sms tool: it sends an SMS and returns its id.
 func (h *handlers) sendSMS(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[SendSMSIn]) (*mcp.CallToolResultFor[SendResult], error) {
 	in := p.Arguments
 	id, err := h.sender.SendSMS(ctx, in.To, in.Body)
@@ -105,6 +112,7 @@ func (h *handlers) sendSMS(ctx context.Context, _ *mcp.ServerSession, p *mcp.Cal
 
 // --- place_call ---
 
+// PlaceCallIn is the input payload for the place_call tool.
 type PlaceCallIn struct {
 	ConversationID string `json:"conversation_id" jsonschema:"the conversation this call belongs to"`
 	To             string `json:"to" jsonschema:"phone number to call in E.164 format"`
@@ -112,11 +120,13 @@ type PlaceCallIn struct {
 	ScriptHint     string `json:"script_hint,omitempty" jsonschema:"optional talking points for the voice agent"`
 }
 
+// PlaceCallResult is the output payload for the place_call tool.
 type PlaceCallResult struct {
 	CallID string `json:"call_id"`
 	Status string `json:"status"`
 }
 
+// placeCall implements the place_call tool: it starts an outbound call and returns its id.
 func (h *handlers) placeCall(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[PlaceCallIn]) (*mcp.CallToolResultFor[PlaceCallResult], error) {
 	in := p.Arguments
 	id, err := h.caller.PlaceCall(ctx, in.To, in.Objective)
@@ -127,6 +137,7 @@ func (h *handlers) placeCall(ctx context.Context, _ *mcp.ServerSession, p *mcp.C
 	return okResult(fmt.Sprintf("Call to %s started (objective: %s), call_id=%s; transcript will arrive via webhook", in.To, in.Objective, id), out), nil
 }
 
+// okResult builds a successful tool result with text and structured content.
 func okResult[T any](text string, out T) *mcp.CallToolResultFor[T] {
 	return &mcp.CallToolResultFor[T]{
 		Content:           []mcp.Content{&mcp.TextContent{Text: text}},
@@ -134,6 +145,7 @@ func okResult[T any](text string, out T) *mcp.CallToolResultFor[T] {
 	}
 }
 
+// errResult builds a tool result flagged as an error with the given message.
 func errResult[T any](text string) *mcp.CallToolResultFor[T] {
 	return &mcp.CallToolResultFor[T]{
 		Content: []mcp.Content{&mcp.TextContent{Text: text}},

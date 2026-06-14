@@ -104,6 +104,8 @@ func toInputSchema(raw json.RawMessage) (anthropic.ToolInputSchemaParam, error) 
 	}, nil
 }
 
+// toAnthropicMessage converts a provider-agnostic Message into the Anthropic SDK
+// message param, mapping each content block to its SDK equivalent.
 func toAnthropicMessage(m Message) anthropic.MessageParam {
 	var blocks []anthropic.ContentBlockParamUnion
 	for _, b := range m.Content {

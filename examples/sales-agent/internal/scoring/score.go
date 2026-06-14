@@ -69,6 +69,7 @@ func Score(lead *crm.Lead, contacts []*crm.Contact, messages []*crm.Message) Res
 	return Result{Score: score, Tier: tier(score), Factors: factors}
 }
 
+// tier maps a numeric score to an A/B/C tier.
 func tier(score int) string {
 	switch {
 	case score >= 70:
@@ -80,6 +81,7 @@ func tier(score int) string {
 	}
 }
 
+// isSenior reports whether a job title indicates a senior decision-maker.
 func isSenior(title string) bool {
 	t := lower(title)
 	for _, kw := range []string{"chief", "cxo", "ceo", "cfo", "cto", "coo", "vp", "vice president", "head", "director", "founder", "owner", "president"} {
@@ -104,6 +106,7 @@ func lower(s string) string {
 	return string(b)
 }
 
+// contains reports whether sub occurs within s.
 func contains(s, sub string) bool {
 	if len(sub) == 0 {
 		return true

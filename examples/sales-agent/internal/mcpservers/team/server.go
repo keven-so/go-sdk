@@ -32,6 +32,7 @@ func New(dryRun bool, live llm.LLM, inner *agent.ToolBridge) *mcp.Server {
 	return s
 }
 
+// handlers holds the dependencies shared by the team tool handlers.
 type handlers struct {
 	dryRun bool
 	live   llm.LLM
@@ -51,14 +52,17 @@ func (h *handlers) run(ctx context.Context, role agent.Role, input, canned strin
 
 // --- research_account ---
 
+// ResearchIn is the input payload for the research_account and prioritize_lead tools.
 type ResearchIn struct {
 	LeadID string `json:"lead_id" jsonschema:"the lead id to research"`
 }
 
+// TextOut is the output payload for the team sub-agent tools: a single text result.
 type TextOut struct {
 	Result string `json:"result"`
 }
 
+// researchAccount implements the research_account tool: it runs the Researcher sub-agent.
 func (h *handlers) researchAccount(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[ResearchIn]) (*mcp.CallToolResultFor[TextOut], error) {
 	in := p.Arguments
 	canned := "Account brief (dry-run): mid-market software co.; contact is a senior ops decision-maker; likely pain = manual ops busywork; signal = recent scaling. Why now: hiring spike suggests growing pains."
@@ -68,6 +72,7 @@ func (h *handlers) researchAccount(ctx context.Context, _ *mcp.ServerSession, p 
 
 // --- draft_message ---
 
+// DraftIn is the input payload for the draft_message tool.
 type DraftIn struct {
 	ConversationID string `json:"conversation_id" jsonschema:"the conversation id"`
 	LeadID         string `json:"lead_id" jsonschema:"the lead id for personalization"`
@@ -76,6 +81,7 @@ type DraftIn struct {
 	KeyPoints      string `json:"key_points,omitempty" jsonschema:"optional points to include"`
 }
 
+// draftMessage implements the draft_message tool: it runs the Copywriter sub-agent.
 func (h *handlers) draftMessage(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[DraftIn]) (*mcp.CallToolResultFor[TextOut], error) {
 	in := p.Arguments
 	canned := fmt.Sprintf("Draft (dry-run, %s): Subject: A quick idea for your ops team — Hi there, following up on our note. Teams your size usually reclaim ~8 hrs/week. Open to a 20-min look this week?", in.Channel)
@@ -86,6 +92,7 @@ func (h *handlers) draftMessage(ctx context.Context, _ *mcp.ServerSession, p *mc
 
 // --- prioritize_lead ---
 
+// prioritizeLead implements the prioritize_lead tool: it runs the RevOps sub-agent.
 func (h *handlers) prioritizeLead(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[ResearchIn]) (*mcp.CallToolResultFor[TextOut], error) {
 	in := p.Arguments
 	canned := "Priority (dry-run): tier B (score ~55). Best next channel: email now, SMS in 2 days. Recommendation: personalize on the scaling signal and offer a specific time."
@@ -95,10 +102,12 @@ func (h *handlers) prioritizeLead(ctx context.Context, _ *mcp.ServerSession, p *
 
 // --- analyze_pipeline ---
 
+// AnalyzeIn is the input payload for the analyze_pipeline tool.
 type AnalyzeIn struct {
 	Scope string `json:"scope,omitempty" jsonschema:"optional scope, e.g. 'this week' or a segment"`
 }
 
+// analyzePipeline implements the analyze_pipeline tool: it runs the RevOps sub-agent.
 func (h *handlers) analyzePipeline(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[AnalyzeIn]) (*mcp.CallToolResultFor[TextOut], error) {
 	canned := "Pipeline (dry-run): healthy top-of-funnel, thin mid-stage. Bottleneck: discovery→proposal. Highest-leverage action: tighten MEDDICC on the 3 oldest open opps."
 	prompt := "Analyze pipeline health."
@@ -111,11 +120,13 @@ func (h *handlers) analyzePipeline(ctx context.Context, _ *mcp.ServerSession, p 
 
 // --- coach_review ---
 
+// CoachIn is the input payload for the coach_review tool.
 type CoachIn struct {
 	ConversationID string `json:"conversation_id" jsonschema:"the conversation id to review"`
 	LeadID         string `json:"lead_id" jsonschema:"the lead id for context"`
 }
 
+// coachReview implements the coach_review tool: it runs the Sales Coach sub-agent.
 func (h *handlers) coachReview(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[CoachIn]) (*mcp.CallToolResultFor[TextOut], error) {
 	in := p.Arguments
 	canned := "Coach review (dry-run): strong rapport, but Economic buyer and Metrics are unconfirmed. Next best action: ask for the success metric and who signs. Likely objection 'send info' — counter by proposing a 20-min tailored walkthrough."
@@ -123,6 +134,7 @@ func (h *handlers) coachReview(ctx context.Context, _ *mcp.ServerSession, p *mcp
 	return finish(out, err)
 }
 
+// finish wraps a sub-agent's output (or error) into an MCP tool result.
 func finish(out string, err error) (*mcp.CallToolResultFor[TextOut], error) {
 	if err != nil {
 		return &mcp.CallToolResultFor[TextOut]{

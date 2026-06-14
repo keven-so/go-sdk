@@ -28,29 +28,35 @@ func New(store crm.Store) *mcp.Server {
 	return s
 }
 
+// handlers holds the dependencies shared by the orchestrator tool handlers.
 type handlers struct {
 	store crm.Store
 }
 
+// RouteIn is the input payload for the route_to_role and handoff tools.
 type RouteIn struct {
 	ConversationID string `json:"conversation_id" jsonschema:"the conversation id"`
 	Role           string `json:"role" jsonschema:"target customer-facing role: sdr | inbound | voice | closer"`
 	Reason         string `json:"reason" jsonschema:"why this role was chosen"`
 }
 
+// RouteOut is the output payload for the route_to_role and handoff tools.
 type RouteOut struct {
 	ConversationID string `json:"conversation_id"`
 	Role           string `json:"role"`
 }
 
+// routeToRole implements the route_to_role tool: it assigns a conversation to a role.
 func (h *handlers) routeToRole(_ context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[RouteIn]) (*mcp.CallToolResultFor[RouteOut], error) {
 	return h.assign(p.Arguments.ConversationID, p.Arguments.Role, p.Arguments.Reason, "route")
 }
 
+// handoff implements the handoff tool: it reassigns a conversation to another role.
 func (h *handlers) handoff(_ context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[RouteIn]) (*mcp.CallToolResultFor[RouteOut], error) {
 	return h.assign(p.Arguments.ConversationID, p.Arguments.Role, p.Arguments.Reason, "handoff")
 }
 
+// assign sets a conversation's current role and records the transition as an activity.
 func (h *handlers) assign(convID, role, reason, kind string) (*mcp.CallToolResultFor[RouteOut], error) {
 	if _, ok := agent.Get(role); !ok {
 		return errResult[RouteOut](fmt.Sprintf("unknown role %q", role)), nil
@@ -70,12 +76,14 @@ func (h *handlers) assign(convID, role, reason, kind string) (*mcp.CallToolResul
 		RouteOut{ConversationID: conv.ID, Role: role}), nil
 }
 
+// QualifyIn is the input payload for the update_qualification tool.
 type QualifyIn struct {
 	ConversationID string         `json:"conversation_id" jsonschema:"the conversation id"`
 	Framework      string         `json:"framework" jsonschema:"bant | meddicc"`
 	Fields         map[string]any `json:"fields" jsonschema:"captured qualification fields"`
 }
 
+// updateQualification implements the update_qualification tool: it persists qualification capture on a lead.
 func (h *handlers) updateQualification(_ context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[QualifyIn]) (*mcp.CallToolResultFor[*crm.Lead], error) {
 	in := p.Arguments
 	conv, err := h.store.GetConversation(in.ConversationID)
@@ -106,6 +114,7 @@ func (h *handlers) updateQualification(_ context.Context, _ *mcp.ServerSession, 
 	return okResult(fmt.Sprintf("Captured %s qualification for lead %s", in.Framework, lead.ID), updated), nil
 }
 
+// okResult builds a successful tool result with text and structured content.
 func okResult[T any](text string, out T) *mcp.CallToolResultFor[T] {
 	return &mcp.CallToolResultFor[T]{
 		Content:           []mcp.Content{&mcp.TextContent{Text: text}},
@@ -113,6 +122,7 @@ func okResult[T any](text string, out T) *mcp.CallToolResultFor[T] {
 	}
 }
 
+// errResult builds a tool result flagged as an error with the given message.
 func errResult[T any](text string) *mcp.CallToolResultFor[T] {
 	return &mcp.CallToolResultFor[T]{
 		Content: []mcp.Content{&mcp.TextContent{Text: text}},

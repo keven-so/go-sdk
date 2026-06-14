@@ -26,6 +26,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/examples/sales-agent/internal/llm"
 )
 
+// main dispatches the salesctl subcommand (roles or dry-run).
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -46,11 +47,13 @@ func main() {
 	}
 }
 
+// usage prints the command synopsis and exits with a non-zero status.
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: salesctl <roles | dry-run [-live]>")
 	os.Exit(2)
 }
 
+// runRoles prints the agent roster in stable display order.
 func runRoles() {
 	fmt.Println("Agent roster:")
 	for _, name := range agent.Order {
@@ -65,6 +68,9 @@ func runRoles() {
 	}
 }
 
+// runDryRun seeds a CustomAIze handoff and runs the Supervisor → SDR flow
+// end-to-end against the in-process tool servers, sending nothing real. When
+// live is true it uses the real Claude API instead of the scripted fake LLM.
 func runDryRun(live bool) error {
 	ctx := context.Background()
 	store := crm.NewMemoryStore()
@@ -190,6 +196,7 @@ func sdrScript(leadID, convID, email, phone string) llm.LLM {
 	)
 }
 
+// printEvent renders a loop event to stdout for the dry-run trace.
 func printEvent(e agent.Event) {
 	switch e.Kind {
 	case "assistant_text":

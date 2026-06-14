@@ -59,11 +59,13 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
+// id returns a new unique id with the given prefix.
 func (s *MemoryStore) id(prefix string) string {
 	s.seq++
 	return fmt.Sprintf("%s_%d", prefix, s.seq)
 }
 
+// CreateLead stores a copy of the lead, assigning an id and timestamps.
 func (s *MemoryStore) CreateLead(l *Lead) (*Lead, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -77,6 +79,7 @@ func (s *MemoryStore) CreateLead(l *Lead) (*Lead, error) {
 	return &cp, nil
 }
 
+// GetLead returns a copy of the lead with the given id.
 func (s *MemoryStore) GetLead(id string) (*Lead, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -88,6 +91,7 @@ func (s *MemoryStore) GetLead(id string) (*Lead, error) {
 	return &cp, nil
 }
 
+// UpdateLead applies the named field updates to a lead and returns the result.
 func (s *MemoryStore) UpdateLead(id string, fields map[string]any) (*Lead, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -120,6 +124,7 @@ func (s *MemoryStore) UpdateLead(id string, fields map[string]any) (*Lead, error
 	return &cp, nil
 }
 
+// CreateContact stores a copy of the contact, assigning an id if unset.
 func (s *MemoryStore) CreateContact(c *Contact) (*Contact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -131,6 +136,7 @@ func (s *MemoryStore) CreateContact(c *Contact) (*Contact, error) {
 	return &cp, nil
 }
 
+// ListContacts returns copies of all contacts belonging to the given lead.
 func (s *MemoryStore) ListContacts(leadID string) ([]*Contact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -144,6 +150,7 @@ func (s *MemoryStore) ListContacts(leadID string) ([]*Contact, error) {
 	return out, nil
 }
 
+// CreateConversation stores a copy of the conversation, assigning an id if unset.
 func (s *MemoryStore) CreateConversation(c *Conversation) (*Conversation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -155,6 +162,7 @@ func (s *MemoryStore) CreateConversation(c *Conversation) (*Conversation, error)
 	return &cp, nil
 }
 
+// GetConversation returns a copy of the conversation with the given id.
 func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -166,6 +174,7 @@ func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {
 	return &cp, nil
 }
 
+// UpdateConversation applies the named field updates to a conversation.
 func (s *MemoryStore) UpdateConversation(id string, fields map[string]any) (*Conversation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -187,6 +196,7 @@ func (s *MemoryStore) UpdateConversation(id string, fields map[string]any) (*Con
 	return &cp, nil
 }
 
+// AddMessage stores a copy of the message, assigning an id and timestamp if unset.
 func (s *MemoryStore) AddMessage(m *Message) (*Message, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -201,6 +211,7 @@ func (s *MemoryStore) AddMessage(m *Message) (*Message, error) {
 	return &cp, nil
 }
 
+// ListMessages returns copies of all messages in the given conversation.
 func (s *MemoryStore) ListMessages(conversationID string) ([]*Message, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -214,6 +225,7 @@ func (s *MemoryStore) ListMessages(conversationID string) ([]*Message, error) {
 	return out, nil
 }
 
+// AddActivity stores a copy of the activity, assigning an id and timestamp if unset.
 func (s *MemoryStore) AddActivity(a *Activity) (*Activity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -228,6 +240,7 @@ func (s *MemoryStore) AddActivity(a *Activity) (*Activity, error) {
 	return &cp, nil
 }
 
+// ListActivities returns copies of all activities in the given conversation.
 func (s *MemoryStore) ListActivities(conversationID string) ([]*Activity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -241,6 +254,7 @@ func (s *MemoryStore) ListActivities(conversationID string) ([]*Activity, error)
 	return out, nil
 }
 
+// CreateDeal stores a copy of the deal, assigning an id if unset.
 func (s *MemoryStore) CreateDeal(d *Deal) (*Deal, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -252,6 +266,7 @@ func (s *MemoryStore) CreateDeal(d *Deal) (*Deal, error) {
 	return &cp, nil
 }
 
+// UpdateDeal applies the named field updates to a deal and returns the result.
 func (s *MemoryStore) UpdateDeal(id string, fields map[string]any) (*Deal, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -273,6 +288,7 @@ func (s *MemoryStore) UpdateDeal(id string, fields map[string]any) (*Deal, error
 	return &cp, nil
 }
 
+// toInt coerces a JSON-decoded numeric value to an int, returning 0 otherwise.
 func toInt(v any) int {
 	switch n := v.(type) {
 	case int:
@@ -285,6 +301,7 @@ func toInt(v any) int {
 	return 0
 }
 
+// toFloat coerces a JSON-decoded numeric value to a float64, returning 0 otherwise.
 func toFloat(v any) float64 {
 	switch n := v.(type) {
 	case float64:

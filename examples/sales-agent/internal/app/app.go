@@ -44,6 +44,8 @@ type connector struct {
 	closers  []func() error
 }
 
+// add connects an MCP server to an in-process client session under the given
+// name and registers both sides for teardown.
 func (c *connector) add(name string, srv *mcp.Server) error {
 	clientT, serverT := mcp.NewInMemoryTransports()
 	ss, err := srv.Connect(c.ctx, serverT)
@@ -61,6 +63,7 @@ func (c *connector) add(name string, srv *mcp.Server) error {
 	return nil
 }
 
+// bridge builds a ToolBridge over the subset of connected sessions named.
 func (c *connector) bridge(names ...string) (*agent.ToolBridge, error) {
 	subset := make(map[string]*mcp.ClientSession, len(names))
 	for _, n := range names {
@@ -69,6 +72,7 @@ func (c *connector) bridge(names ...string) (*agent.ToolBridge, error) {
 	return agent.NewToolBridge(c.ctx, subset)
 }
 
+// cleanup closes every session opened by the connector, ignoring errors.
 func (c *connector) cleanup() {
 	for _, fn := range c.closers {
 		_ = fn()
