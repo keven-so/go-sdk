@@ -39,20 +39,33 @@ go run ./cmd/salesctl dry-run -live      # real Claude (needs ANTHROPIC_API_KEY)
 activity log. With `-live`, the same loop runs against the real Claude API while
 the comms providers stay in dry-run, so still nothing is actually sent.
 
-## Architecture (one loop, many roles)
+## Architecture (hierarchical supervisor + agent-as-tool)
 
-Each "team member" (SDR, Inbound, Closer, Voice) is the **same loop**
-parameterized by a `Role` = system prompt + allowed tools. A non-LLM router
-picks the role; handoff between roles is an explicit tool. See `internal/agent/
-roles.go`.
+The roster is grounded in current production AI sales systems (Alta Katie/Alex/Luna,
+Salesforce Agentforce SDR + Sales Coach, 11x/Landbase hierarchical multi-agent):
+
+- **Supervisor** routes each event to a **customer-facing** agent: **Outbound SDR**,
+  **Inbound Qualifier**, **Voice/Calling**, **AE/Closer**.
+- **Support agents** — **Researcher**, **Copywriter**, **RevOps/Intelligence**,
+  **Sales Coach/QA** — are exposed to the others as sub-agent **tools** (the
+  agent-as-tool pattern via the `team` server).
+- Role transitions use an explicit `handoff(to_role, reason)` tool; qualification
+  uses **BANT** (SDR/Inbound) and **MEDDICC** (Closer), persisted via
+  `update_qualification`. See `internal/agent/roles.go`; run `salesctl roles`.
+
+Each customer-facing "team member" is the **same `agent.Loop`** parameterized by a
+`Role` (system prompt + allowed tools). Two tool tiers break the agent-as-tool
+cycle: an **inner** bridge (crm + intel) for support sub-agents, and an **outer**
+bridge (all servers) for customer-facing agents.
 
 ```
-salesctl ─▶ agent.Loop ─▶ ToolBridge ─▶ mcp.ClientSession.CallTool
-   (brain: Anthropic │ Fake)                    │
-                                    ┌────────────┼─────────────┬───────────┐
-                                  comms         crm         schedule     intel
-                              (email/sms/      (Supabase    (calendar)   (enrich/
-                               voice, dryrun)   later)                    score)
+salesctl ─▶ Supervisor.Route ─▶ agent.Loop ─▶ ToolBridge ─▶ mcp.ClientSession.CallTool
+   (brain: Anthropic │ Fake)                        │
+        ┌───────────┬───────────┬───────────┬───────┴────┬──────────────┐
+      comms        crm       schedule      intel        team         orchestrator
+   (email/sms/  (Supabase   (calendar)   (enrich/   (research/draft/  (route/handoff/
+    voice,dry)   later)                   score)     prioritize/coach)  qualification)
+                                                     = support sub-agents
 ```
 
 ## Roadmap

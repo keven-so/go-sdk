@@ -19,8 +19,10 @@ type Lead struct {
 	Score     int       `json:"score"`
 	Tier      string    `json:"tier"` // A | B | C
 	OwnerRole string    `json:"owner_role"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	// Qualification holds framework-keyed capture, e.g. {"bant": {...}, "meddicc": {...}}.
+	Qualification map[string]any `json:"qualification,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
 // Contact is a person at a Lead's company.
@@ -71,9 +73,10 @@ type Activity struct {
 
 // Deal is a sales opportunity tracked through stages.
 type Deal struct {
-	ID     string  `json:"id"`
-	LeadID string  `json:"lead_id"`
-	Stage  string  `json:"stage"` // discovery | proposal | negotiation | closed_won | closed_lost
-	Amount float64 `json:"amount"`
-	Won    bool    `json:"won"`
+	ID            string         `json:"id"`
+	LeadID        string         `json:"lead_id"`
+	Stage         string         `json:"stage"` // discovery | proposal | negotiation | closed_won | closed_lost
+	Amount        float64        `json:"amount"`
+	Won           bool           `json:"won"`
+	Qualification map[string]any `json:"qualification,omitempty"`
 }

@@ -23,6 +23,7 @@ type Store interface {
 
 	CreateConversation(*Conversation) (*Conversation, error)
 	GetConversation(id string) (*Conversation, error)
+	UpdateConversation(id string, fields map[string]any) (*Conversation, error)
 
 	AddMessage(*Message) (*Message, error)
 	ListMessages(conversationID string) ([]*Message, error)
@@ -108,6 +109,10 @@ func (s *MemoryStore) UpdateLead(id string, fields map[string]any) (*Lead, error
 			l.Domain, _ = v.(string)
 		case "score":
 			l.Score = toInt(v)
+		case "qualification":
+			if m, ok := v.(map[string]any); ok {
+				l.Qualification = m
+			}
 		}
 	}
 	l.UpdatedAt = time.Now().UTC()
@@ -156,6 +161,27 @@ func (s *MemoryStore) GetConversation(id string) (*Conversation, error) {
 	c, ok := s.conversations[id]
 	if !ok {
 		return nil, fmt.Errorf("conversation %q not found", id)
+	}
+	cp := *c
+	return &cp, nil
+}
+
+func (s *MemoryStore) UpdateConversation(id string, fields map[string]any) (*Conversation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.conversations[id]
+	if !ok {
+		return nil, fmt.Errorf("conversation %q not found", id)
+	}
+	for k, v := range fields {
+		switch k {
+		case "current_role":
+			c.CurrentRole, _ = v.(string)
+		case "status":
+			c.Status, _ = v.(string)
+		case "channel_primary":
+			c.ChannelPrimary, _ = v.(string)
+		}
 	}
 	cp := *c
 	return &cp, nil

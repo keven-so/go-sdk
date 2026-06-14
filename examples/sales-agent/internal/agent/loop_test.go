@@ -24,7 +24,7 @@ func TestLoopDrivesMCPTools(t *testing.T) {
 	lead, _ := store.CreateLead(&crm.Lead{Company: "Acme", Domain: "acme.com", Source: "marketing"})
 	conv, _ := store.CreateConversation(&crm.Conversation{LeadID: lead.ID})
 
-	tools, err := app.BuildTools(ctx, store, true)
+	tools, err := app.BuildTools(ctx, store, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestLoopDrivesMCPTools(t *testing.T) {
 func TestFilteredDefsRespectsRole(t *testing.T) {
 	ctx := context.Background()
 	store := crm.NewMemoryStore()
-	tools, err := app.BuildTools(ctx, store, true)
+	tools, err := app.BuildTools(ctx, store, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

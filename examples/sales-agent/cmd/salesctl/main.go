@@ -2,14 +2,16 @@
 // Use of this source code is governed by an MIT-style
 // license that can be found in the LICENSE file.
 
-// Command salesctl is the Phase 0 driver for the multi-agent sales system. Its
-// "dry-run" subcommand seeds a marketing-handoff lead and runs the SDR agent
-// end-to-end against the in-process MCP tool servers, sending nothing real.
+// Command salesctl drives the multi-agent sales system. Its "dry-run" subcommand
+// seeds a CustomAIze lead handoff and runs the Supervisor → SDR flow end-to-end
+// against the in-process MCP tool servers, sending nothing real. "roles" prints
+// the agent roster.
 //
 // Usage:
 //
-//	go run ./cmd/salesctl dry-run            # scripted fake LLM, no API key
-//	go run ./cmd/salesctl dry-run -live      # real Claude (needs ANTHROPIC_API_KEY)
+//	go run ./cmd/salesctl roles               # print the agent roster
+//	go run ./cmd/salesctl dry-run             # scripted fake LLM, no API key
+//	go run ./cmd/salesctl dry-run -live       # real Claude (needs ANTHROPIC_API_KEY)
 package main
 
 import (
@@ -25,17 +27,41 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 || os.Args[1] != "dry-run" {
-		fmt.Fprintln(os.Stderr, "usage: salesctl dry-run [-live]")
-		os.Exit(2)
+	if len(os.Args) < 2 {
+		usage()
 	}
-	fs := flag.NewFlagSet("dry-run", flag.ExitOnError)
-	live := fs.Bool("live", false, "use the real Claude API (requires ANTHROPIC_API_KEY)")
-	_ = fs.Parse(os.Args[2:])
+	switch os.Args[1] {
+	case "roles":
+		runRoles()
+	case "dry-run":
+		fs := flag.NewFlagSet("dry-run", flag.ExitOnError)
+		live := fs.Bool("live", false, "use the real Claude API (requires ANTHROPIC_API_KEY)")
+		_ = fs.Parse(os.Args[2:])
+		if err := runDryRun(*live); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+	default:
+		usage()
+	}
+}
 
-	if err := runDryRun(*live); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+func usage() {
+	fmt.Fprintln(os.Stderr, "usage: salesctl <roles | dry-run [-live]>")
+	os.Exit(2)
+}
+
+func runRoles() {
+	fmt.Println("Agent roster:")
+	for _, name := range agent.Order {
+		r := agent.Registry[name]
+		fmt.Printf("\n• %s (%s) [%s]\n  %s\n  tools: %v\n", r.Title, r.Name, r.Kind, r.Mission, r.AllowedTools)
+		if len(r.HandoffTargets) > 0 {
+			fmt.Printf("  hands off to: %v\n", r.HandoffTargets)
+		}
+		if len(r.KPIs) > 0 {
+			fmt.Printf("  KPIs: %v\n", r.KPIs)
+		}
 	}
 }
 
@@ -43,8 +69,8 @@ func runDryRun(live bool) error {
 	ctx := context.Background()
 	store := crm.NewMemoryStore()
 
-	// 1) Simulate the marketing -> sales handoff: a lead, a contact, a
-	//    conversation, and the first (marketing) email already in the thread.
+	// 1) Simulate the CustomAIze → sales handoff: lead, contact, conversation,
+	//    and the first (marketing) email already in the thread.
 	lead, _ := store.CreateLead(&crm.Lead{
 		Source: "marketing", Company: "Northwind Software", Domain: "northwind.tech",
 		Status: "new", OwnerRole: "sdr",
@@ -56,25 +82,23 @@ func runDryRun(live bool) error {
 	})
 	conv, _ := store.CreateConversation(&crm.Conversation{
 		LeadID: lead.ID, ContactID: contact.ID, ChannelPrimary: "email",
-		CurrentRole: "sdr", Status: "engaged", GmailThreadID: "thread_marketing_001",
+		CurrentRole: "", Status: "engaged", GmailThreadID: "thread_customaize_001",
 	})
 	_, _ = store.AddMessage(&crm.Message{
 		ConversationID: conv.ID, Direction: "out", Channel: "email",
-		ExternalID: "mkt_email_001", Subject: "Cut ops busywork at Northwind",
-		Body: "Hi Dana — saw Northwind is scaling ops. We help teams like yours automate the busywork. Worth a quick look?",
+		ExternalID: "customaize_email_001", Subject: "Cut ops busywork at Northwind",
+		Body: "Hi Dana — saw Northwind is scaling ops. We help teams automate the busywork. Worth a quick look?",
 	})
 
-	fmt.Printf("=== Handoff ===\nlead=%s company=%q contact=%q (%s)\nconversation=%s thread=%s\n\n",
+	fmt.Printf("=== CustomAIze handoff ===\nlead=%s company=%q contact=%q (%s)\nconversation=%s thread=%s\n\n",
 		lead.ID, lead.Company, contact.Name, contact.Email, conv.ID, conv.GmailThreadID)
 
-	// 2) Build the in-process MCP tool servers + bridge (dry-run providers).
-	tools, err := app.BuildTools(ctx, store, true)
-	if err != nil {
-		return err
-	}
-	defer tools.Close()
+	// 2) Supervisor routes the event (rules-first) to a customer-facing role.
+	routed := agent.Route(agent.EventHandoff, lead.Status)
+	fmt.Printf("=== Supervisor ===\nevent=%s lead_status=%s → routed to %q\n\n", agent.EventHandoff, lead.Status, routed)
+	role, _ := agent.Get(routed)
 
-	// 3) Choose the brain: scripted fake (default) or real Claude (-live).
+	// 3) Build the two-tier in-process tool topology (dry-run providers).
 	var brain llm.LLM
 	if live {
 		key := os.Getenv("ANTHROPIC_API_KEY")
@@ -82,28 +106,36 @@ func runDryRun(live bool) error {
 			return fmt.Errorf("-live requires ANTHROPIC_API_KEY")
 		}
 		brain = llm.NewAnthropic(key, os.Getenv("ANTHROPIC_MODEL"), 1024)
+	}
+	tools, err := app.BuildTools(ctx, store, !live, brain)
+	if err != nil {
+		return err
+	}
+	defer tools.Close()
+
+	if live {
 		fmt.Println("=== Running with live Claude ===")
 	} else {
 		brain = sdrScript(lead.ID, conv.ID, contact.Email, contact.Phone)
 		fmt.Println("=== Running with scripted fake LLM (no API calls) ===")
 	}
 
-	// 4) Run the SDR loop, printing every step.
+	// 4) Run the routed customer-facing agent, printing every step.
 	loop := &agent.Loop{
 		LLM:      brain,
 		Bridge:   tools.Bridge,
 		Model:    os.Getenv("ANTHROPIC_MODEL"),
-		MaxTurns: 16,
+		MaxTurns: 20,
 		Observer: printEvent,
 	}
 	history := []llm.Message{{
 		Role: "user",
 		Content: []llm.Block{{Type: "text", Text: fmt.Sprintf(
-			"New marketing handoff. lead_id=%s conversation_id=%s contact_email=%s contact_phone=%s. "+
-				"Marketing already sent the first email. Take it from here.",
+			"New CustomAIze handoff. lead_id=%s conversation_id=%s contact_email=%s contact_phone=%s. "+
+				"The first email is already sent. Take it from here.",
 			lead.ID, conv.ID, contact.Email, contact.Phone)}},
 	}}
-	if _, err := loop.Run(ctx, agent.SDR, history); err != nil {
+	if _, err := loop.Run(ctx, role, history); err != nil {
 		return err
 	}
 
@@ -116,34 +148,45 @@ func runDryRun(live bool) error {
 	for _, a := range acts {
 		fmt.Printf("- [%s] %s\n", a.Type, a.Summary)
 	}
+	updated, _ := store.GetConversation(conv.ID)
+	finalLead, _ := store.GetLead(lead.ID)
+	fmt.Printf("\nconversation now owned by role=%q; lead qualification=%v\n", updated.CurrentRole, finalLead.Qualification)
 	return nil
 }
 
 // sdrScript is the canned SDR conversation exercised in dry-run: load context,
-// score, enrich, follow up by email, offer a call, and book a meeting — touching
-// all four tool servers with zero external sends.
+// prioritize + research + draft via support agent-as-tools, send, capture BANT,
+// then hand off to the closer — touching base, team, and orchestrator servers
+// with zero external sends.
 func sdrScript(leadID, convID, email, phone string) llm.LLM {
 	return llm.NewFake(
 		llm.AssistantToolUse("t1", "get_lead", map[string]any{"lead_id": leadID}),
-		llm.AssistantToolUse("t2", "score_lead", map[string]any{"lead_id": leadID}),
-		llm.AssistantToolUse("t3", "enrich_lead", map[string]any{"lead_id": leadID}),
-		llm.AssistantToolUse("t4", "send_email", map[string]any{
+		llm.AssistantToolUse("t2", "prioritize_lead", map[string]any{"lead_id": leadID}),
+		llm.AssistantToolUse("t3", "research_account", map[string]any{"lead_id": leadID}),
+		llm.AssistantToolUse("t4", "draft_message", map[string]any{
+			"conversation_id": convID, "lead_id": leadID, "channel": "email",
+			"intent": "book a 20-minute intro meeting",
+		}),
+		llm.AssistantToolUse("t5", "send_email", map[string]any{
 			"conversation_id": convID, "to": email,
 			"subject":   "Re: Cut ops busywork at Northwind",
 			"body_html": "Hi Dana — following up on my note. Teams your size usually claw back ~8 hrs/week. Open to a 20-min look this week?",
 		}),
-		llm.AssistantToolUse("t5", "log_activity", map[string]any{
-			"conversation_id": convID, "type": "note", "summary": "Sent personalized email follow-up #1",
+		llm.AssistantToolUse("t6", "update_qualification", map[string]any{
+			"conversation_id": convID, "framework": "bant",
+			"fields": map[string]any{
+				"budget": "~$50k confirmed", "authority": "VP Ops, decision-maker",
+				"need": "manual ops busywork", "timeline": "this quarter",
+			},
 		}),
-		llm.AssistantToolUse("t6", "send_sms", map[string]any{
-			"conversation_id": convID, "to": phone,
-			"body": "Hi Dana, it's Sam from Acme — just emailed you re: saving your ops team time. Happy to find 20 min this week!",
+		llm.AssistantToolUse("t7", "log_activity", map[string]any{
+			"conversation_id": convID, "type": "note", "summary": "Sent follow-up; BANT confirmed",
 		}),
-		llm.AssistantToolUse("t7", "book_meeting", map[string]any{
-			"conversation_id": convID, "contact_email": email,
-			"start": "2026-06-16T14:00:00Z", "duration_min": 20, "title": "Northwind <> Acme intro",
+		llm.AssistantToolUse("t8", "handoff", map[string]any{
+			"conversation_id": convID, "role": "closer",
+			"reason": "BANT satisfied — budget, authority, need, and timeline all confirmed",
 		}),
-		llm.AssistantText("Follow-up email + SMS sent and a meeting slot offered. Awaiting Dana's reply; will continue the cadence if no response."),
+		llm.AssistantText("Prioritized, researched, and emailed Dana; captured BANT and handed off to the closer to run MEDDICC and close."),
 	)
 }
 
@@ -159,7 +202,5 @@ func printEvent(e agent.Event) {
 			marker = "❌"
 		}
 		fmt.Printf("[%s]    %s %s\n", e.Role, marker, e.Output)
-	case "done":
-		// handled by trailing assistant_text
 	}
 }
