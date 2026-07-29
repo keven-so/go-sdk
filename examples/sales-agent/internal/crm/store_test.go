@@ -6,6 +6,7 @@ package crm
 
 import "testing"
 
+// TestMemoryStoreLeadLifecycle exercises create/get/update of a lead in the in-memory store.
 func TestMemoryStoreLeadLifecycle(t *testing.T) {
 	s := NewMemoryStore()
 
@@ -33,6 +34,7 @@ func TestMemoryStoreLeadLifecycle(t *testing.T) {
 	}
 }
 
+// TestMemoryStoreContactsAndActivities covers contact and activity storage and listing.
 func TestMemoryStoreContactsAndActivities(t *testing.T) {
 	s := NewMemoryStore()
 	lead, _ := s.CreateLead(&Lead{Company: "Acme"})

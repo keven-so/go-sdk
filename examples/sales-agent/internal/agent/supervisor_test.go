@@ -10,6 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/examples/sales-agent/internal/agent"
 )
 
+// TestSupervisorRoute verifies event+lead-status combinations route to the expected role.
 func TestSupervisorRoute(t *testing.T) {
 	cases := []struct {
 		event  string

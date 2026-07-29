@@ -18,6 +18,7 @@ import (
 // tool_use is routed through the ToolBridge to a real in-process MCP server, the
 // result round-trips back, and the side effect (a logged activity) lands in the
 // store.
+// TestLoopDrivesMCPTools runs the agent loop end-to-end, driving tools over the MCP bridge.
 func TestLoopDrivesMCPTools(t *testing.T) {
 	ctx := context.Background()
 	store := crm.NewMemoryStore()
@@ -66,6 +67,7 @@ func TestLoopDrivesMCPTools(t *testing.T) {
 }
 
 // TestFilteredDefsRespectsRole ensures a role only sees its allowed tools.
+// TestFilteredDefsRespectsRole checks a role's allowlist filters the exposed tool defs.
 func TestFilteredDefsRespectsRole(t *testing.T) {
 	ctx := context.Background()
 	store := crm.NewMemoryStore()

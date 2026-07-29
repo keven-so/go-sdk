@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// TestNewSupabaseStoreValidation checks constructor validation and table prefixing.
 func TestNewSupabaseStoreValidation(t *testing.T) {
 	if _, err := NewSupabaseStore("", "key", ""); err == nil {
 		t.Error("expected error for empty url")
@@ -28,6 +29,7 @@ func TestNewSupabaseStoreValidation(t *testing.T) {
 	}
 }
 
+// TestInsertMapStripsDefaults verifies insertMap drops id, zero timestamps, and null fields.
 func TestInsertMapStripsDefaults(t *testing.T) {
 	// A lead with no id/timestamps and a nil qualification map: those keys must
 	// be dropped so Postgres applies its column defaults.

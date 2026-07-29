@@ -18,6 +18,7 @@ import (
 
 // TestSubAgentDrivesBaseTool proves the agent-as-tool core: a sub-agent loop
 // drives a base MCP tool and its side effect lands in the store.
+// TestSubAgentDrivesBaseTool verifies a SubAgent invokes a base tool via the inner bridge.
 func TestSubAgentDrivesBaseTool(t *testing.T) {
 	ctx := context.Background()
 	store := crm.NewMemoryStore()
@@ -53,6 +54,7 @@ func TestSubAgentDrivesBaseTool(t *testing.T) {
 
 // TestTeamToolsViaBridge exercises the team MCP server (agent-as-tool) end-to-end
 // through the real ToolBridge in dry-run mode.
+// TestTeamToolsViaBridge exercises the team server's sub-agent tools through the bridge.
 func TestTeamToolsViaBridge(t *testing.T) {
 	ctx := context.Background()
 	store := crm.NewMemoryStore()

@@ -10,6 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/examples/sales-agent/internal/agent"
 )
 
+// TestRegistryWellFormed checks the role registry and stable order are internally consistent.
 func TestRegistryWellFormed(t *testing.T) {
 	if len(agent.Order) != len(agent.Registry) {
 		t.Fatalf("Order (%d) and Registry (%d) sizes differ", len(agent.Order), len(agent.Registry))
@@ -37,6 +38,7 @@ func TestRegistryWellFormed(t *testing.T) {
 	}
 }
 
+// TestExpectedRolesPresent asserts every expected sales role is registered.
 func TestExpectedRolesPresent(t *testing.T) {
 	want := []string{"supervisor", "sdr", "inbound", "voice", "closer", "researcher", "copywriter", "revops", "coach"}
 	for _, name := range want {

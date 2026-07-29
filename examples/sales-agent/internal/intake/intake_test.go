@@ -32,6 +32,7 @@ func samplePayload() *HandoffPayload {
 	}
 }
 
+// TestProcessCreatesCRMState verifies a handoff creates the lead, contact, conversation, first email, and activity.
 func TestProcessCreatesCRMState(t *testing.T) {
 	store := crm.NewMemoryStore()
 	p := NewProcessor(store)
@@ -77,6 +78,7 @@ func TestProcessCreatesCRMState(t *testing.T) {
 	}
 }
 
+// TestProcessIsIdempotent verifies a replayed handoff returns the original ids and writes nothing new.
 func TestProcessIsIdempotent(t *testing.T) {
 	store := crm.NewMemoryStore()
 	p := NewProcessor(store)
@@ -102,6 +104,7 @@ func TestProcessIsIdempotent(t *testing.T) {
 	}
 }
 
+// TestProcessValidation checks required-field validation rejects malformed payloads.
 func TestProcessValidation(t *testing.T) {
 	store := crm.NewMemoryStore()
 	p := NewProcessor(store)
@@ -124,6 +127,7 @@ func TestProcessValidation(t *testing.T) {
 	}
 }
 
+// TestWebhookSignature checks the handler accepts a valid HMAC signature and rejects a bad one.
 func TestWebhookSignature(t *testing.T) {
 	const secret = "shh"
 	h := NewHandler(NewProcessor(crm.NewMemoryStore()), secret)
@@ -155,6 +159,7 @@ func TestWebhookSignature(t *testing.T) {
 	}
 }
 
+// TestWebhookMethodNotAllowed checks non-POST requests are rejected with 405.
 func TestWebhookMethodNotAllowed(t *testing.T) {
 	h := NewHandler(NewProcessor(crm.NewMemoryStore()), "")
 	req := httptest.NewRequest(http.MethodGet, "/webhooks/handoff", nil)
