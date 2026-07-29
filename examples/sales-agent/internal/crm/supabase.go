@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -105,27 +106,38 @@ func (s *SupabaseStore) insert(table string, v, out any) error {
 	return decodeOne(data, table, out)
 }
 
-// getOne GETs the single row matching filter (e.g. "id=eq.123") into out.
-func (s *SupabaseStore) getOne(table, filter string, out any) error {
-	data, err := s.req(http.MethodGet, s.table(table), filter+"&select=*&limit=1", nil)
+// eq builds a URL-encoded PostgREST equality filter (column=eq.value). Encoding
+// the value keeps a caller-supplied id from injecting extra query parameters.
+func eq(column, value string) string {
+	return column + "=eq." + url.QueryEscape(value)
+}
+
+// getOne GETs the single row where column == value into out.
+func (s *SupabaseStore) getOne(table, column, value string, out any) error {
+	data, err := s.req(http.MethodGet, s.table(table), eq(column, value)+"&select=*&limit=1", nil)
 	if err != nil {
 		return err
 	}
 	return decodeOne(data, table, out)
 }
 
-// patch PATCHes the row with the given id, applying fields, into out.
-func (s *SupabaseStore) patch(table, id string, fields map[string]any, out any) error {
-	data, err := s.req(http.MethodPatch, s.table(table), "id=eq."+id, fields)
+// patch PATCHes the row where column == value, applying fields, into out.
+func (s *SupabaseStore) patch(table, column, value string, fields map[string]any, out any) error {
+	data, err := s.req(http.MethodPatch, s.table(table), eq(column, value), fields)
 	if err != nil {
 		return err
 	}
 	return decodeOne(data, table, out)
 }
 
-// list GETs all rows matching filter into out (a pointer to a slice).
-func (s *SupabaseStore) list(table, filter string, out any) error {
-	data, err := s.req(http.MethodGet, s.table(table), filter+"&select=*", nil)
+// list GETs all rows where column == value into out (a pointer to a slice),
+// optionally ordered (e.g. "created_at.asc") for a stable sequence.
+func (s *SupabaseStore) list(table, column, value, order string, out any) error {
+	q := eq(column, value) + "&select=*"
+	if order != "" {
+		q += "&order=" + order
+	}
+	data, err := s.req(http.MethodGet, s.table(table), q, nil)
 	if err != nil {
 		return err
 	}
@@ -181,13 +193,13 @@ func (s *SupabaseStore) CreateLead(l *Lead) (*Lead, error) {
 // GetLead returns the lead with the given id.
 func (s *SupabaseStore) GetLead(id string) (*Lead, error) {
 	var out Lead
-	return &out, s.getOne("leads", "id=eq."+id, &out)
+	return &out, s.getOne("leads", "id", id, &out)
 }
 
 // UpdateLead applies the field updates to a lead and returns the result.
 func (s *SupabaseStore) UpdateLead(id string, fields map[string]any) (*Lead, error) {
 	var out Lead
-	return &out, s.patch("leads", id, fields, &out)
+	return &out, s.patch("leads", "id", id, fields, &out)
 }
 
 // CreateContact inserts a contact and returns the stored row.
@@ -199,7 +211,7 @@ func (s *SupabaseStore) CreateContact(c *Contact) (*Contact, error) {
 // ListContacts returns the contacts belonging to the given lead.
 func (s *SupabaseStore) ListContacts(leadID string) ([]*Contact, error) {
 	var out []*Contact
-	return out, s.list("contacts", "lead_id=eq."+leadID, &out)
+	return out, s.list("contacts", "lead_id", leadID, "", &out)
 }
 
 // CreateConversation inserts a conversation and returns the stored row.
@@ -211,13 +223,13 @@ func (s *SupabaseStore) CreateConversation(c *Conversation) (*Conversation, erro
 // GetConversation returns the conversation with the given id.
 func (s *SupabaseStore) GetConversation(id string) (*Conversation, error) {
 	var out Conversation
-	return &out, s.getOne("conversations", "id=eq."+id, &out)
+	return &out, s.getOne("conversations", "id", id, &out)
 }
 
 // UpdateConversation applies the field updates to a conversation.
 func (s *SupabaseStore) UpdateConversation(id string, fields map[string]any) (*Conversation, error) {
 	var out Conversation
-	return &out, s.patch("conversations", id, fields, &out)
+	return &out, s.patch("conversations", "id", id, fields, &out)
 }
 
 // AddMessage inserts a message and returns the stored row.
@@ -226,10 +238,10 @@ func (s *SupabaseStore) AddMessage(m *Message) (*Message, error) {
 	return &out, s.insert("messages", m, &out)
 }
 
-// ListMessages returns the messages in the given conversation.
+// ListMessages returns the messages in the given conversation, oldest first.
 func (s *SupabaseStore) ListMessages(conversationID string) ([]*Message, error) {
 	var out []*Message
-	return out, s.list("messages", "conversation_id=eq."+conversationID, &out)
+	return out, s.list("messages", "conversation_id", conversationID, "created_at.asc", &out)
 }
 
 // AddActivity inserts an activity and returns the stored row.
@@ -238,10 +250,10 @@ func (s *SupabaseStore) AddActivity(a *Activity) (*Activity, error) {
 	return &out, s.insert("activities", a, &out)
 }
 
-// ListActivities returns the activities in the given conversation.
+// ListActivities returns the activities in the given conversation, oldest first.
 func (s *SupabaseStore) ListActivities(conversationID string) ([]*Activity, error) {
 	var out []*Activity
-	return out, s.list("activities", "conversation_id=eq."+conversationID, &out)
+	return out, s.list("activities", "conversation_id", conversationID, "created_at.asc", &out)
 }
 
 // CreateDeal inserts a deal and returns the stored row.
@@ -253,5 +265,30 @@ func (s *SupabaseStore) CreateDeal(d *Deal) (*Deal, error) {
 // UpdateDeal applies the field updates to a deal and returns the result.
 func (s *SupabaseStore) UpdateDeal(id string, fields map[string]any) (*Deal, error) {
 	var out Deal
-	return &out, s.patch("deals", id, fields, &out)
+	return &out, s.patch("deals", "id", id, fields, &out)
+}
+
+// CreateHandoff claims a handoff by inserting its unique external_id, returning
+// ErrHandoffExists when the row already exists (Postgres unique violation 23505).
+func (s *SupabaseStore) CreateHandoff(h *Handoff) (*Handoff, error) {
+	var out Handoff
+	if err := s.insert("handoffs", h, &out); err != nil {
+		if strings.Contains(err.Error(), "23505") || strings.Contains(err.Error(), "duplicate key") {
+			return nil, fmt.Errorf("%w: %s", ErrHandoffExists, h.ExternalID)
+		}
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetHandoff returns the handoff with the given external id.
+func (s *SupabaseStore) GetHandoff(externalID string) (*Handoff, error) {
+	var out Handoff
+	return &out, s.getOne("handoffs", "external_id", externalID, &out)
+}
+
+// UpdateHandoff applies the field updates to a handoff (keyed by external_id).
+func (s *SupabaseStore) UpdateHandoff(externalID string, fields map[string]any) (*Handoff, error) {
+	var out Handoff
+	return &out, s.patch("handoffs", "external_id", externalID, fields, &out)
 }

@@ -6,9 +6,9 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/examples/sales-agent/internal/crm"
 	"github.com/modelcontextprotocol/go-sdk/examples/sales-agent/internal/intake"
@@ -19,27 +19,39 @@ const handoffPath = "/webhooks/handoff"
 
 // newStore returns a Supabase-backed store when SUPABASE_URL and
 // SUPABASE_SERVICE_ROLE_KEY are set (namespaced by the optional
-// SUPABASE_TABLE_PREFIX), otherwise the in-memory store. The second return value
-// names the backend for logging.
-func newStore() (crm.Store, string) {
+// SUPABASE_TABLE_PREFIX), otherwise the in-memory store. When Supabase is
+// configured but initialization fails it returns the error rather than silently
+// falling back, so handoffs are never accepted into a store that will be lost on
+// restart. The second return value names the backend for logging.
+func newStore() (crm.Store, string, error) {
 	url, key := os.Getenv("SUPABASE_URL"), os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
 	if url != "" && key != "" {
 		s, err := crm.NewSupabaseStore(url, key, os.Getenv("SUPABASE_TABLE_PREFIX"))
-		if err == nil {
-			return s, "supabase"
+		if err != nil {
+			return nil, "", fmt.Errorf("supabase store: %w", err)
 		}
-		log.Printf("intake: falling back to in-memory store: %v", err)
+		return s, "supabase", nil
 	}
-	return crm.NewMemoryStore(), "memory"
+	return crm.NewMemoryStore(), "memory", nil
 }
 
-// runServe starts the HTTP server that accepts CustomAIze handoffs. It reads the
-// signing secret from WEBHOOK_SIGNING_SECRET, selects the store backend from the
-// environment, and listens on addr.
-func runServe(addr string) error {
-	store, backend := newStore()
+// runServe starts the HTTP server that accepts CustomAIze handoffs. It selects
+// the store backend from the environment and requires WEBHOOK_SIGNING_SECRET so
+// intake is signed by default; pass insecure=true (dev only) to accept unsigned
+// requests when the secret is unset.
+func runServe(addr string, insecure bool) error {
+	store, backend, err := newStore()
+	if err != nil {
+		return err
+	}
+
+	secret := os.Getenv("WEBHOOK_SIGNING_SECRET")
+	if secret == "" && !insecure {
+		return fmt.Errorf("WEBHOOK_SIGNING_SECRET is required; pass -insecure to accept unsigned requests (dev only)")
+	}
+
 	proc := intake.NewProcessor(store)
-	handler := intake.NewHandler(proc, os.Getenv("WEBHOOK_SIGNING_SECRET"))
+	handler := intake.NewHandler(proc, secret)
 
 	mux := http.NewServeMux()
 	mux.Handle(handoffPath, handler)
@@ -49,8 +61,17 @@ func runServe(addr string) error {
 	})
 
 	fmt.Printf("salesctl serve: listening on %s (store: %s)\n  handoff: %s\n", addr, backend, intake.Describe(handoffPath))
-	if os.Getenv("WEBHOOK_SIGNING_SECRET") == "" {
-		fmt.Println("  warning: WEBHOOK_SIGNING_SECRET unset — signature checks disabled (dev only)")
+	if secret == "" {
+		fmt.Println("  warning: WEBHOOK_SIGNING_SECRET unset — signature checks disabled (-insecure, dev only)")
 	}
-	return http.ListenAndServe(addr, mux)
+
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	return srv.ListenAndServe()
 }

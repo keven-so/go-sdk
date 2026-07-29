@@ -51,14 +51,23 @@ database schema that persists it.
   HMAC-SHA256 body signature (`X-CustomAIze-Signature: sha256=<hex>`, keyed by
   `WEBHOOK_SIGNING_SECRET`), then creates the lead, contact, conversation, the
   already-sent first email, and a `handoff_received` activity, and routes the lead
-  to a customer-facing role via the supervisor. Delivery is **idempotent** on
-  `handoff_id` (replays return the original ids, write nothing).
+  to a customer-facing role via the supervisor. Delivery is **idempotent**: the
+  processor claims the `handoff_id` (a unique `handoffs.external_id` row) *before*
+  any CRM writes, so a concurrent or retried duplicate loses the claim race and
+  returns the original ids without creating anything. With the Supabase store that
+  guard is durable across restarts and replicas; with the in-memory store it holds
+  for the process lifetime.
 - **Schema** (`migrations/0001_init.sql`) — `leads`, `contacts`, `conversations`,
-  `messages`, `activities`, `deals`, plus a `handoffs` table whose unique
-  `external_id` gives durable exactly-once delivery. Files only; see
-  [`migrations/README.md`](migrations/README.md) for how/when to apply.
+  `messages`, `activities`, `deals` (with `CHECK` constraints on the enum-like
+  columns), plus a `handoffs` table whose unique `external_id` backs the claim
+  above. Files only; see [`migrations/README.md`](migrations/README.md) for
+  how/when to apply.
+
+`salesctl serve` requires `WEBHOOK_SIGNING_SECRET` (fails fast without it); pass
+`-insecure` to accept unsigned requests in local development only.
 
 ```bash
+export WEBHOOK_SIGNING_SECRET=dev-secret
 go run ./cmd/salesctl serve        # listens on $HTTP_ADDR (default :8080)
 
 # example handoff (computes the signature from WEBHOOK_SIGNING_SECRET):
@@ -74,9 +83,10 @@ curl -sX POST localhost:8080/webhooks/handoff \
 - **Supabase-backed store** (`internal/crm/supabase.go`) — a `crm.Store`
   implementation over Supabase's PostgREST API using the service-role key. When
   `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set, `salesctl serve` uses it
-  automatically; otherwise it falls back to the in-memory store, so the contract
-  and end-to-end flow stay testable with no database. `SUPABASE_TABLE_PREFIX`
-  (e.g. `sa_`) namespaces the tables when sharing a project's `public` schema.
+  automatically (and fails fast if it can't initialize, rather than silently
+  losing data); with neither set it uses the in-memory store, so the contract and
+  end-to-end flow stay testable with no database. `SUPABASE_TABLE_PREFIX` (e.g.
+  `sa_`) namespaces the tables when sharing a project's `public` schema.
 
 The exact CustomAIze payload may differ — `HandoffPayload` in
 `internal/intake/intake.go` is the contract to adjust, and `Context` carries

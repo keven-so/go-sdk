@@ -127,6 +127,12 @@ type CoachIn struct {
 }
 
 // coachReview implements the coach_review tool: it runs the Sales Coach sub-agent.
+//
+// In this Phase 0 skeleton the sub-agent is given the conversation/lead ids but
+// not the transcript itself — SalesCoach's inner bridge (crm+intel) has no
+// conversation-retrieval tool yet, so live-mode reviews are only loosely grounded.
+// Grounding the coach on real message history lands with the conversation store
+// tools in a later phase; dry-run returns a deterministic canned review.
 func (h *handlers) coachReview(ctx context.Context, _ *mcp.ServerSession, p *mcp.CallToolParamsFor[CoachIn]) (*mcp.CallToolResultFor[TextOut], error) {
 	in := p.Arguments
 	canned := "Coach review (dry-run): strong rapport, but Economic buyer and Metrics are unconfirmed. Next best action: ask for the success metric and who signs. Likely objection 'send info' — counter by proposing a 20-min tailored walkthrough."

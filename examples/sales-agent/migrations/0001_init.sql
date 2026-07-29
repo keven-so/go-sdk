@@ -22,12 +22,12 @@ $$ language plpgsql;
 -- leads: a company/opportunity handed off from marketing or generated outbound.
 create table if not exists leads (
   id            uuid primary key default gen_random_uuid(),
-  source        text not null default 'marketing',  -- marketing | inbound | outbound
+  source        text not null default 'marketing' check (source in ('marketing','inbound','outbound')),
   company       text not null default '',
   domain        text not null default '',
-  status        text not null default 'new',         -- new | working | engaged | meeting | won | lost
-  score         int  not null default 0,
-  tier          text not null default '',            -- A | B | C
+  status        text not null default 'new' check (status in ('new','working','engaged','meeting','won','lost')),
+  score         int  not null default 0 check (score between 0 and 100),
+  tier          text not null default '' check (tier in ('','A','B','C')),
   owner_role    text not null default '',
   qualification jsonb not null default '{}'::jsonb,  -- {"bant": {...}, "meddicc": {...}}
   created_at    timestamptz not null default now(),
@@ -57,8 +57,8 @@ create table if not exists conversations (
   id              uuid primary key default gen_random_uuid(),
   lead_id         uuid not null references leads(id) on delete cascade,
   contact_id      uuid references contacts(id) on delete set null,
-  channel_primary text not null default 'email',
-  current_role    text not null default '',          -- sdr | inbound | closer | voice
+  channel_primary text not null default 'email' check (channel_primary in ('email','sms','voice')),
+  current_role    text not null default '' check (current_role in ('','sdr','inbound','closer','voice')),
   status          text not null default '',
   gmail_thread_id text not null default ''
 );
@@ -68,8 +68,8 @@ create index if not exists conversations_lead_id_idx on conversations(lead_id);
 create table if not exists messages (
   id              uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references conversations(id) on delete cascade,
-  direction       text not null,                       -- in | out
-  channel         text not null,                       -- email | sms | voice
+  direction       text not null check (direction in ('in','out')),
+  channel         text not null check (channel in ('email','sms','voice')),
   external_id     text not null default '',
   subject         text not null default '',
   body            text not null default '',
@@ -92,7 +92,7 @@ create index if not exists activities_conversation_id_idx on activities(conversa
 create table if not exists deals (
   id            uuid primary key default gen_random_uuid(),
   lead_id       uuid not null references leads(id) on delete cascade,
-  stage         text not null default 'discovery',     -- discovery | proposal | negotiation | closed_won | closed_lost
+  stage         text not null default 'discovery' check (stage in ('discovery','proposal','negotiation','closed_won','closed_lost')),
   amount        numeric not null default 0,
   won           boolean not null default false,
   qualification jsonb not null default '{}'::jsonb

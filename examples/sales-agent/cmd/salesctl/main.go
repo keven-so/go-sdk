@@ -27,7 +27,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/examples/sales-agent/internal/llm"
 )
 
-// main dispatches the salesctl subcommand (roles or dry-run).
+// main dispatches the salesctl subcommand (roles, dry-run, or serve).
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -46,6 +46,7 @@ func main() {
 	case "serve":
 		fs := flag.NewFlagSet("serve", flag.ExitOnError)
 		addr := fs.String("addr", "", "listen address (defaults to $HTTP_ADDR or :8080)")
+		insecure := fs.Bool("insecure", false, "accept unsigned requests when WEBHOOK_SIGNING_SECRET is unset (dev only)")
 		_ = fs.Parse(os.Args[2:])
 		listen := *addr
 		if listen == "" {
@@ -53,7 +54,7 @@ func main() {
 				listen = ":8080"
 			}
 		}
-		if err := runServe(listen); err != nil {
+		if err := runServe(listen, *insecure); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)
 		}
@@ -64,7 +65,7 @@ func main() {
 
 // usage prints the command synopsis and exits with a non-zero status.
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: salesctl <roles | dry-run [-live] | serve [-addr :8080]>")
+	fmt.Fprintln(os.Stderr, "usage: salesctl <roles | dry-run [-live] | serve [-addr :8080] [-insecure]>")
 	os.Exit(2)
 }
 

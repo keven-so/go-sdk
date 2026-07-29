@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 // SignatureHeader carries the hex-encoded HMAC-SHA256 of the raw request body,
@@ -27,13 +28,14 @@ const maxBodyBytes = 1 << 20 // 1 MiB
 // /webhooks/handoff. It verifies the body signature, decodes a HandoffPayload,
 // and applies it via the Processor.
 type Handler struct {
-	proc   *Processor
-	secret []byte
+	proc     *Processor
+	secret   []byte
+	warnOnce sync.Once
 }
 
 // NewHandler returns a handler that applies handoffs through proc. If secret is
 // non-empty, requests must carry a valid SignatureHeader; if empty, signature
-// verification is skipped (dev only) and a warning is logged on first use.
+// verification is skipped (dev only) and a warning is logged once.
 func NewHandler(proc *Processor, secret string) *Handler {
 	return &Handler{proc: proc, secret: []byte(secret)}
 }
@@ -52,7 +54,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(h.secret) == 0 {
-		log.Printf("intake: WEBHOOK_SIGNING_SECRET is empty; skipping signature verification (dev only)")
+		h.warnOnce.Do(func() {
+			log.Printf("intake: WEBHOOK_SIGNING_SECRET is empty; skipping signature verification (dev only)")
+		})
 	} else if !validSignature(h.secret, body, r.Header.Get(SignatureHeader)) {
 		writeError(w, http.StatusUnauthorized, "invalid signature")
 		return

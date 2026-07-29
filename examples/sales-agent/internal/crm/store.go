@@ -5,10 +5,15 @@
 package crm
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
+
+// ErrHandoffExists is returned by CreateHandoff when a handoff with the same
+// ExternalID already exists. Intake treats it as a duplicate delivery.
+var ErrHandoffExists = errors.New("handoff already exists")
 
 // Store is the persistence abstraction every layer depends on. The in-memory
 // implementation below mirrors the shape used by examples/memory in this repo;
@@ -17,6 +22,12 @@ type Store interface {
 	CreateLead(*Lead) (*Lead, error)
 	GetLead(id string) (*Lead, error)
 	UpdateLead(id string, fields map[string]any) (*Lead, error)
+
+	// CreateHandoff claims a handoff, returning ErrHandoffExists if one with the
+	// same ExternalID was already claimed (the durable idempotency guard).
+	CreateHandoff(*Handoff) (*Handoff, error)
+	GetHandoff(externalID string) (*Handoff, error)
+	UpdateHandoff(externalID string, fields map[string]any) (*Handoff, error)
 
 	CreateContact(*Contact) (*Contact, error)
 	ListContacts(leadID string) ([]*Contact, error)
@@ -45,6 +56,7 @@ type MemoryStore struct {
 	messages      map[string]*Message
 	activities    map[string]*Activity
 	deals         map[string]*Deal
+	handoffs      map[string]*Handoff // keyed by ExternalID
 }
 
 // NewMemoryStore returns an empty in-memory Store.
@@ -56,6 +68,7 @@ func NewMemoryStore() *MemoryStore {
 		messages:      map[string]*Message{},
 		activities:    map[string]*Activity{},
 		deals:         map[string]*Deal{},
+		handoffs:      map[string]*Handoff{},
 	}
 }
 
@@ -285,6 +298,58 @@ func (s *MemoryStore) UpdateDeal(id string, fields map[string]any) (*Deal, error
 		}
 	}
 	cp := *d
+	return &cp, nil
+}
+
+// CreateHandoff claims a handoff, returning ErrHandoffExists if its ExternalID
+// was already claimed.
+func (s *MemoryStore) CreateHandoff(h *Handoff) (*Handoff, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if h.ExternalID == "" {
+		return nil, fmt.Errorf("handoff external_id is required")
+	}
+	if _, ok := s.handoffs[h.ExternalID]; ok {
+		return nil, ErrHandoffExists
+	}
+	cp := *h
+	if cp.ID == "" {
+		cp.ID = s.id("handoff")
+	}
+	cp.CreatedAt = time.Now().UTC()
+	s.handoffs[cp.ExternalID] = &cp
+	return &cp, nil
+}
+
+// GetHandoff returns the handoff with the given external id.
+func (s *MemoryStore) GetHandoff(externalID string) (*Handoff, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h, ok := s.handoffs[externalID]
+	if !ok {
+		return nil, fmt.Errorf("handoff %q not found", externalID)
+	}
+	cp := *h
+	return &cp, nil
+}
+
+// UpdateHandoff applies the named field updates to a handoff and returns it.
+func (s *MemoryStore) UpdateHandoff(externalID string, fields map[string]any) (*Handoff, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h, ok := s.handoffs[externalID]
+	if !ok {
+		return nil, fmt.Errorf("handoff %q not found", externalID)
+	}
+	for k, v := range fields {
+		switch k {
+		case "lead_id":
+			h.LeadID, _ = v.(string)
+		case "conversation_id":
+			h.ConversationID, _ = v.(string)
+		}
+	}
+	cp := *h
 	return &cp, nil
 }
 

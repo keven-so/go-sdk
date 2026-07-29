@@ -71,6 +71,20 @@ type Activity struct {
 	CreatedAt      time.Time      `json:"created_at"`
 }
 
+// Handoff is a durable record of an inbound marketing→sales handoff, keyed by a
+// unique ExternalID (the sender's handoff id). Claiming it before any CRM writes
+// makes intake idempotent: a replay of the same ExternalID is rejected by the
+// unique index instead of creating duplicate leads.
+type Handoff struct {
+	ID             string         `json:"id"`
+	ExternalID     string         `json:"external_id"`
+	Source         string         `json:"source"`
+	LeadID         string         `json:"lead_id"`
+	ConversationID string         `json:"conversation_id"`
+	Payload        map[string]any `json:"payload,omitempty"`
+	CreatedAt      time.Time      `json:"created_at"`
+}
+
 // Deal is a sales opportunity tracked through stages.
 type Deal struct {
 	ID            string         `json:"id"`

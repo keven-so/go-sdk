@@ -11,8 +11,8 @@
 package intake
 
 import (
+	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/examples/sales-agent/internal/agent"
@@ -92,38 +92,41 @@ func (p *HandoffPayload) validate() error {
 	return nil
 }
 
-// Processor applies handoffs to a crm.Store. It is safe for concurrent use.
+// Processor applies handoffs to a crm.Store. It is safe for concurrent use:
+// idempotency is enforced durably by the store's handoff claim (a unique
+// external_id), not an in-process lock, so distinct handoffs process
+// concurrently while a replay of the same HandoffID is rejected.
 type Processor struct {
 	store crm.Store
-
-	mu   sync.Mutex
-	seen map[string]Result // idempotency cache keyed by HandoffID
 }
 
 // NewProcessor returns a Processor backed by the given store.
-//
-// Idempotency here is in-process (a seen-id cache), which is enough for the
-// in-memory store and tests. A Supabase-backed store gets durable exactly-once
-// delivery for free via the unique handoffs.external_id index (see
-// migrations/0001_init.sql).
 func NewProcessor(store crm.Store) *Processor {
-	return &Processor{store: store, seen: map[string]Result{}}
+	return &Processor{store: store}
 }
 
-// Process records a handoff: it creates the lead, contact, conversation, the
-// already-sent first email, and a handoff activity, and routes the lead to a
-// customer-facing role. Replaying a HandoffID returns the original Result with
-// Duplicate set and writes nothing.
+// Process records a handoff: it claims the HandoffID, then creates the lead,
+// contact, conversation, the already-sent first email, and a handoff activity,
+// and routes the lead to a customer-facing role. A replay of a HandoffID loses
+// the claim race and returns the original Result with Duplicate set, writing no
+// new CRM state.
 func (p *Processor) Process(payload *HandoffPayload) (Result, error) {
 	if err := payload.validate(); err != nil {
 		return Result{}, err
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if prev, ok := p.seen[payload.HandoffID]; ok {
-		prev.Duplicate = true
-		return prev, nil
+	// Claim the handoff before any CRM writes. The unique external_id makes this
+	// the durable, exactly-once guard: a concurrent or retried duplicate delivery
+	// fails the claim and short-circuits to the original result.
+	if _, err := p.store.CreateHandoff(&crm.Handoff{
+		ExternalID: payload.HandoffID,
+		Source:     orElse(payload.Source, "customaize"),
+		Payload:    payload.Context,
+	}); err != nil {
+		if errors.Is(err, crm.ErrHandoffExists) {
+			return p.duplicate(payload.HandoffID)
+		}
+		return Result{}, fmt.Errorf("claim handoff: %w", err)
 	}
 
 	// The supervisor routes a fresh handoff to a customer-facing role; the lead
@@ -203,14 +206,45 @@ func (p *Processor) Process(payload *HandoffPayload) (Result, error) {
 		return Result{}, fmt.Errorf("log handoff activity: %w", err)
 	}
 
-	res := Result{
+	// Record where the handoff landed so a later duplicate delivery can return
+	// the same ids without re-running the pipeline.
+	if _, err := p.store.UpdateHandoff(payload.HandoffID, map[string]any{
+		"lead_id":         lead.ID,
+		"conversation_id": conv.ID,
+	}); err != nil {
+		return Result{}, fmt.Errorf("finalize handoff: %w", err)
+	}
+
+	return Result{
 		HandoffID:      payload.HandoffID,
 		LeadID:         lead.ID,
 		ContactID:      contact.ID,
 		ConversationID: conv.ID,
 		OwnerRole:      owner,
+	}, nil
+}
+
+// duplicate builds the Result for an already-claimed handoff by reading back the
+// stored handoff row (and its lead) so the response matches the original.
+func (p *Processor) duplicate(handoffID string) (Result, error) {
+	h, err := p.store.GetHandoff(handoffID)
+	if err != nil {
+		return Result{}, fmt.Errorf("load existing handoff: %w", err)
 	}
-	p.seen[payload.HandoffID] = res
+	res := Result{
+		HandoffID:      handoffID,
+		LeadID:         h.LeadID,
+		ConversationID: h.ConversationID,
+		Duplicate:      true,
+	}
+	if h.LeadID != "" {
+		if lead, err := p.store.GetLead(h.LeadID); err == nil {
+			res.OwnerRole = lead.OwnerRole
+		}
+		if cs, err := p.store.ListContacts(h.LeadID); err == nil && len(cs) > 0 {
+			res.ContactID = cs[0].ID
+		}
+	}
 	return res, nil
 }
 
