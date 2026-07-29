@@ -71,9 +71,14 @@ curl -sX POST localhost:8080/webhooks/handoff \
   -H "X-CustomAIze-Signature: $sig" -d "$body"
 ```
 
-The webhook runs against the in-memory store today; pointing it at a
-Supabase-backed `crm.Store` (after applying the migration) is the Phase 1
-follow-up. The exact CustomAIze payload may differ — `HandoffPayload` in
+- **Supabase-backed store** (`internal/crm/supabase.go`) — a `crm.Store`
+  implementation over Supabase's PostgREST API using the service-role key. When
+  `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set, `salesctl serve` uses it
+  automatically; otherwise it falls back to the in-memory store, so the contract
+  and end-to-end flow stay testable with no database. `SUPABASE_TABLE_PREFIX`
+  (e.g. `sa_`) namespaces the tables when sharing a project's `public` schema.
+
+The exact CustomAIze payload may differ — `HandoffPayload` in
 `internal/intake/intake.go` is the contract to adjust, and `Context` carries
 arbitrary marketing metadata so the schema need not change to add fields.
 
@@ -112,5 +117,6 @@ Phase 0 (skeleton) → **Phase 1: Supabase schema + handoff webhook (this)** →
 live Gmail → SMS + cadences + scoring → voice + booking + Closer → analytics &
 hardening. See the project plan for details.
 
-Phase 1 remaining: implement a Supabase-backed `crm.Store` and apply
-`migrations/0001_init.sql` to a project, then point `salesctl serve` at it.
+Phase 1 remaining: apply `migrations/0001_init.sql` to a Supabase project and set
+the `SUPABASE_*` env vars; `salesctl serve` then persists handoffs there via the
+Supabase-backed `crm.Store`.

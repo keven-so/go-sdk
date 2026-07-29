@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -16,12 +17,27 @@ import (
 // handoffPath is where CustomAIze POSTs lead handoffs.
 const handoffPath = "/webhooks/handoff"
 
-// runServe starts the HTTP server that accepts CustomAIze handoffs. It backs the
-// intake with an in-memory store (a Supabase-backed store satisfying crm.Store
-// will replace it once migrations are applied), reads the signing secret from
-// WEBHOOK_SIGNING_SECRET, and listens on addr.
+// newStore returns a Supabase-backed store when SUPABASE_URL and
+// SUPABASE_SERVICE_ROLE_KEY are set (namespaced by the optional
+// SUPABASE_TABLE_PREFIX), otherwise the in-memory store. The second return value
+// names the backend for logging.
+func newStore() (crm.Store, string) {
+	url, key := os.Getenv("SUPABASE_URL"), os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	if url != "" && key != "" {
+		s, err := crm.NewSupabaseStore(url, key, os.Getenv("SUPABASE_TABLE_PREFIX"))
+		if err == nil {
+			return s, "supabase"
+		}
+		log.Printf("intake: falling back to in-memory store: %v", err)
+	}
+	return crm.NewMemoryStore(), "memory"
+}
+
+// runServe starts the HTTP server that accepts CustomAIze handoffs. It reads the
+// signing secret from WEBHOOK_SIGNING_SECRET, selects the store backend from the
+// environment, and listens on addr.
 func runServe(addr string) error {
-	store := crm.NewMemoryStore()
+	store, backend := newStore()
 	proc := intake.NewProcessor(store)
 	handler := intake.NewHandler(proc, os.Getenv("WEBHOOK_SIGNING_SECRET"))
 
@@ -32,7 +48,7 @@ func runServe(addr string) error {
 		_, _ = w.Write([]byte("ok\n"))
 	})
 
-	fmt.Printf("salesctl serve: listening on %s\n  handoff: %s\n", addr, intake.Describe(handoffPath))
+	fmt.Printf("salesctl serve: listening on %s (store: %s)\n  handoff: %s\n", addr, backend, intake.Describe(handoffPath))
 	if os.Getenv("WEBHOOK_SIGNING_SECRET") == "" {
 		fmt.Println("  warning: WEBHOOK_SIGNING_SECRET unset — signature checks disabled (dev only)")
 	}

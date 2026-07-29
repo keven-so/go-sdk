@@ -31,12 +31,24 @@ supabase db execute --file migrations/0001_init.sql
 psql "$DATABASE_URL" -f migrations/0001_init.sql
 ```
 
+## Table prefix (sharing a project)
+
+`0001_init.sql` creates the tables in `public` unprefixed, which is ideal for a
+**dedicated** database. To drop the schema into a **shared** project's `public`
+schema without colliding with existing tables (e.g. a project that already has
+its own `leads`), prefix every table name — e.g. `sa_leads`, `sa_contacts` — and
+set `SUPABASE_TABLE_PREFIX=sa_` so the Go store targets the prefixed names. The
+prefix keeps everything in `public`, which is the schema PostgREST exposes by
+default, so no API-settings change is needed.
+
 ## Recommended order
 
-1. Apply `0001_init.sql` to a **non-production** Supabase project first.
-2. Wire a Supabase-backed `crm.Store` (Phase 1 follow-up) using
-   `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (or `DATABASE_URL`).
-3. Point `salesctl serve` at it instead of the in-memory store.
+1. Apply `0001_init.sql` to a **non-production** Supabase project (or a shared
+   project with a table prefix, see above).
+2. Set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (and `SUPABASE_TABLE_PREFIX`
+   if you prefixed) — `salesctl serve` then uses the Supabase-backed `crm.Store`
+   (`internal/crm/supabase.go`) automatically instead of the in-memory store.
+3. POST a handoff and confirm rows land in the database.
 
-Until then the webhook intake runs against the in-memory store, so the contract
-and end-to-end flow are testable without a database.
+Without those env vars the webhook intake runs against the in-memory store, so
+the contract and end-to-end flow stay testable with no database.
